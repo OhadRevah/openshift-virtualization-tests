@@ -1185,3 +1185,26 @@ def compare_metric_file_system_values_with_vm_file_system_values(
             f"Result from metric for the mountpoint: {mount_point}: {metric_value}"
         )
         raise
+
+
+def validate_metric_value_with_round_down(
+    prometheus: Prometheus, metric_name: str, expected_value: float, timeout: int = TIMEOUT_4MIN
+) -> None:
+    samples = TimeoutSampler(
+        wait_timeout=timeout,
+        sleep=TIMEOUT_15SEC,
+        func=get_metrics_value,
+        prometheus=prometheus,
+        metrics_name=metric_name,
+    )
+    sample: Union[int, float] = 0
+    try:
+        for sample in samples:
+            if sample and round(float(sample)) == abs(expected_value):
+                return
+    except TimeoutExpiredError:
+        LOGGER.info(
+            f"Metric value of: {metric_name} is: {sample}, expected value:{expected_value},\n "
+            f"The value should be between: {sample * 0.95}-{sample * 1.05}"
+        )
+        raise
