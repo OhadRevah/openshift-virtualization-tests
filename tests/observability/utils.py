@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from kubernetes.dynamic import DynamicClient
 from kubernetes.dynamic.exceptions import NotFoundError, ResourceNotFoundError
@@ -56,7 +57,7 @@ def wait_for_kubemacpool_pods_error_state(dyn_client: DynamicClient, hco_namespa
             return
 
 
-def verify_no_listed_alerts_on_cluster(prometheus: Prometheus, alerts_list: list) -> None:
+def verify_no_listed_alerts_on_cluster(prometheus: Prometheus, alerts_list: list[dict[str, Any]]) -> None:
     """
     It gets a list of alerts and verifies that none of them are firing on a cluster.
     """

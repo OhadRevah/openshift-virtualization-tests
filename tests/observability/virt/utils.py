@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from kubernetes.dynamic import DynamicClient
 from ocp_resources.replica_set import ReplicaSet
@@ -18,7 +19,9 @@ def delete_replica_set_by_prefix(replica_set_prefix: str, namespace: str, dyn_cl
         replica_set.delete(wait=True)
 
 
-def get_replica_set_by_name_prefix(dyn_client: DynamicClient, replica_set_prefix: str, namespace: str) -> list:
+def get_replica_set_by_name_prefix(
+    dyn_client: DynamicClient, replica_set_prefix: str, namespace: str
+) -> list[ReplicaSet]:
     replica_sets = [
         replica
         for replica in ReplicaSet.get(dyn_client=dyn_client, namespace=namespace)
@@ -49,7 +52,7 @@ def wait_hco_csv_updated_virt_operator_httpget(namespace: str, updated_hco_field
         raise
 
 
-def csv_dict_with_bad_virt_operator_httpget_path(hco_csv_dict: dict) -> dict:
+def csv_dict_with_bad_virt_operator_httpget_path(hco_csv_dict: dict[str, Any]) -> dict[str, Any]:
     for deployment in hco_csv_dict["spec"]["install"]["spec"]["deployments"]:
         if deployment["name"] == VIRT_OPERATOR:
             deployment["spec"]["template"]["spec"]["containers"][0]["readinessProbe"]["httpGet"]["path"] = (
