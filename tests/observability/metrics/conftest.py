@@ -61,6 +61,7 @@ from utilities.constants import (
     PVC,
     SOURCE_POD,
     TCP_TIMEOUT_30SEC,
+    TIMEOUT_1MIN,
     TIMEOUT_2MIN,
     TIMEOUT_4MIN,
     TIMEOUT_10MIN,
@@ -872,15 +873,29 @@ def vm_memory_working_set_bytes(vm_for_test):
         bitmath.parse_string_unsafe(
             re.search(
                 r"\b(\d+Mi)\b",
-                run_command(
-                    command=shlex.split(
-                        f"oc adm top pod {vm_for_test.vmi.virt_launcher_pod.name} -n {vm_for_test.namespace}"
-                    ),
-                    check=False,
-                )[1],
+                vm_memory_working_set_command_output(vm=vm_for_test)[1],
             ).group(1)
         ).bytes
     )
+
+
+def vm_memory_working_set_command_output(vm: VirtualMachineForTests):
+    command = f"oc adm top pod {vm.vmi.virt_launcher_pod.name} -n {vm.namespace}"
+    samples = TimeoutSampler(
+        wait_timeout=TIMEOUT_1MIN,
+        sleep=TIMEOUT_15SEC,
+        func=run_command,
+        command=shlex.split(command),
+        check=False,
+    )
+    sample = None
+    try:
+        for sample in samples:
+            if sample:
+                return sample
+    except TimeoutExpiredError:
+        LOGGER.error(f"Execution of command {command} failed and got None value: {sample}.")
+        raise
 
 
 @pytest.fixture()
