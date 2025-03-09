@@ -270,7 +270,7 @@ class TestKubevirtVmiMigrationMetrics:
         query,
     ):
         time_passed_from_starting_migration = time_passed_from_timestamp_until_now_minutes(
-            timestamp=vm_for_migration_metrics_test.instance.status.migrationState.startTimestamp
+            timestamp=vm_for_migration_metrics_test.vmi.instance.status.migrationState.startTimestamp
         )
         wait_for_non_empty_metrics_value(
             prometheus=prometheus,
