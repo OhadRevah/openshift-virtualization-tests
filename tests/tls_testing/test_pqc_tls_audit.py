@@ -2,7 +2,7 @@ import logging
 
 import pytest
 
-from tests.install_upgrade_operators.crypto_policy.constants import (
+from tests.tls_testing.constants import (
     PQC_GROUP_SECP256R1_MLKEM768,
     PQC_GROUP_SECP384R1_MLKEM1024,
 )

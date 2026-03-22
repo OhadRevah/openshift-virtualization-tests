@@ -53,6 +53,7 @@ from ocp_resources.pod import Pod
 from ocp_resources.resource import ResourceEditor, get_client
 from ocp_resources.role_binding import RoleBinding
 from ocp_resources.secret import Secret
+from ocp_resources.service import Service
 from ocp_resources.service_account import ServiceAccount
 from ocp_resources.sriov_network_node_policy import SriovNetworkNodePolicy
 from ocp_resources.storage_class import StorageClass
@@ -130,11 +131,10 @@ from utilities.cpu import (
     find_common_cpu_model_for_live_migration,
     get_common_cpu_from_nodes,
     get_host_model_cpu,
-    get_nodes_cpu_architecture,
     get_nodes_cpu_model,
 )
 from utilities.data_utils import base64_encode_str, name_prefix
-from utilities.exceptions import MissingEnvironmentVariableError
+from utilities.exceptions import MissingEnvironmentVariableError, MissingResourceException
 from utilities.infra import (
     ClusterHosts,
     ExecCommandOnPod,
@@ -491,11 +491,12 @@ def cnv_tests_utilities_namespace(admin_client, installing_cnv):
 
 
 @pytest.fixture(scope="session")
-def cnv_tests_utilities_service_account(cnv_tests_utilities_namespace, installing_cnv):
+def cnv_tests_utilities_service_account(admin_client, cnv_tests_utilities_namespace, installing_cnv):
     if installing_cnv:
         yield
     else:
         with ServiceAccount(
+            client=admin_client,
             name=CNV_TEST_SERVICE_ACCOUNT,
             namespace=cnv_tests_utilities_namespace.name,
         ) as service_account:
@@ -528,7 +529,7 @@ def utility_daemonset(
             generated_pulled_secret=generated_pulled_secret,
             service_account=cnv_tests_utilities_service_account,
         )
-        with DaemonSet(yaml_file=modified_ds_yaml_file) as ds:
+        with DaemonSet(client=admin_client, yaml_file=modified_ds_yaml_file) as ds:
             ds.wait_until_deployed()
             yield ds
 
@@ -1033,8 +1034,8 @@ def skip_access_mode_rwo_scope_function(storage_class_matrix__function__):
 
 
 @pytest.fixture(scope="session")
-def nodes_cpu_architecture(nodes):
-    return get_nodes_cpu_architecture(nodes=nodes)
+def nodes_cpu_architecture():
+    return py_config["cpu_arch"]
 
 
 @pytest.fixture(scope="session")
@@ -2727,3 +2728,26 @@ def hugepages_gib_values(workers):
         for worker in workers
         if (value := worker.instance.status.allocatable.get(NODE_HUGE_PAGES_1GI_KEY))
     ]
+
+
+@pytest.fixture(scope="session")
+def services_to_check_connectivity(hco_namespace, admin_client):
+    services_list = []
+    missing_services = []
+    services_name_list = [
+        "virt-api",
+        "ssp-operator-service",
+        "ssp-operator-metrics",
+        "virt-template-validator",
+        "kubemacpool-service",
+        "cdi-api",
+        "hostpath-provisioner-operator-service",
+    ]
+    for service_name in services_name_list:
+        service = Service(name=service_name, namespace=hco_namespace.name, client=admin_client)
+        services_list.append(service) if service.exists else missing_services.append(service_name)
+
+    if missing_services:
+        raise MissingResourceException(f"Services: {missing_services}.")
+
+    return services_list
