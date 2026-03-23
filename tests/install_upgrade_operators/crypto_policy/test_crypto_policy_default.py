@@ -33,7 +33,7 @@ from utilities.constants import (
 )
 
 LOGGER = logging.getLogger(__name__)
-pytestmark = [pytest.mark.post_upgrade, pytest.mark.sno, pytest.mark.s390x]
+pytestmark = [pytest.mark.post_upgrade, pytest.mark.sno, pytest.mark.s390x, pytest.mark.tls_compliance]
 
 
 @pytest.mark.parametrize(

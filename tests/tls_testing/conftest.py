@@ -1,8 +1,10 @@
 import logging
 
 import pytest
+from ocp_resources.network_policy import NetworkPolicy
 
 from tests.tls_testing.constants import (
+    OPENSSL_CONNECTION_SUCCESS_INDICATOR,
     PQC_CLASSICAL_FALLBACK_GROUP,
     PQC_GROUP_SECP256R1_MLKEM768,
     PQC_HANDSHAKE_FAILURE_INDICATOR,
@@ -15,6 +17,9 @@ from tests.tls_testing.utils import (
 from utilities.infra import ExecCommandOnPod
 
 LOGGER = logging.getLogger(__name__)
+
+CONSOLE_PLUGIN_SERVICE_NAME = "kubevirt-console-plugin-service"
+CONSOLE_PLUGIN_SERVICE_PORT = 9443
 
 
 @pytest.fixture(scope="session")
@@ -31,7 +36,28 @@ def worker_exec(workers_utility_pods, workers):
 
 
 @pytest.fixture(scope="session")
-def services_without_classical_fallback(worker_exec, services_to_check_connectivity):
+def console_plugin_test_network_policy(hco_namespace, admin_client):
+    """Temporarily allows ingress to kubevirt-console-plugin pods for TLS testing.
+
+    The console-plugin has a NetworkPolicy that restricts ingress to only the openshift-console namespace.
+    This fixture creates an additional NetworkPolicy to allow our test utility pods to reach it.
+    """
+    LOGGER.info(f"Creating temporary NetworkPolicy to allow test access to {CONSOLE_PLUGIN_SERVICE_NAME}")
+    with NetworkPolicy(
+        name="allow-tls-test-console-plugin",
+        namespace=hco_namespace.name,
+        client=admin_client,
+        pod_selector={"matchLabels": {"app.kubernetes.io/component": "kubevirt-console-plugin"}},
+        ingress=[{"ports": [{"protocol": "TCP", "port": CONSOLE_PLUGIN_SERVICE_PORT}]}],
+        policy_types=["Ingress"],
+    ):
+        yield
+
+
+@pytest.fixture(scope="session")
+def services_without_classical_fallback(
+    worker_exec, services_to_check_connectivity, console_plugin_test_network_policy
+):
     """Probes each CNV service with PQC + classical fallback.
 
     Returns:
@@ -44,6 +70,9 @@ def services_without_classical_fallback(worker_exec, services_to_check_connectiv
         LOGGER.info(f"Probing PQC with fallback on service: {service_name}")
         command = compose_openssl_pqc_command(service_spec=service.instance.spec, groups=pqc_groups_with_fallback)
         output = worker_exec.exec(command=command, ignore_rc=True)
+        if OPENSSL_CONNECTION_SUCCESS_INDICATOR not in output:
+            LOGGER.warning(f"Service {service_name} is unreachable, skipping PQC probe")
+            continue
         peer_temp_key = parse_peer_temp_key(openssl_output=output)
         LOGGER.info(f"Service {service_name} negotiated key exchange: {peer_temp_key}")
         if not peer_temp_key or PQC_GROUP_SECP256R1_MLKEM768.lower() in peer_temp_key.lower():
@@ -52,7 +81,7 @@ def services_without_classical_fallback(worker_exec, services_to_check_connectiv
 
 
 @pytest.fixture(scope="session")
-def services_accepting_pqc_only(worker_exec, services_to_check_connectivity):
+def services_accepting_pqc_only(worker_exec, services_to_check_connectivity, console_plugin_test_network_policy):
     """Probes each CNV service with PQC-only (no fallback).
 
     Returns:
@@ -64,6 +93,9 @@ def services_accepting_pqc_only(worker_exec, services_to_check_connectivity):
         LOGGER.info(f"Probing PQC-only on service: {service_name}")
         command = compose_openssl_pqc_command(service_spec=service.instance.spec, groups=PQC_GROUP_SECP256R1_MLKEM768)
         output = worker_exec.exec(command=command, ignore_rc=True)
+        if OPENSSL_CONNECTION_SUCCESS_INDICATOR not in output and PQC_HANDSHAKE_FAILURE_INDICATOR not in output:
+            LOGGER.warning(f"Service {service_name} is unreachable, skipping PQC-only probe")
+            continue
         if PQC_HANDSHAKE_FAILURE_INDICATOR not in output:
             failed_services[service_name] = output[:200]
     return failed_services

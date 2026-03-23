@@ -2742,6 +2742,8 @@ def services_to_check_connectivity(hco_namespace, admin_client):
         "kubemacpool-service",
         "cdi-api",
         "hostpath-provisioner-operator-service",
+        "kubevirt-console-plugin-service",
+        "kubevirt-apiserver-proxy-service",
     ]
     for service_name in services_name_list:
         service = Service(name=service_name, namespace=hco_namespace.name, client=admin_client)

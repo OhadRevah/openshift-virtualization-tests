@@ -22,18 +22,20 @@ def get_node_available_tls_groups(utility_pods: list, node: Resource) -> list[st
     return [group.strip() for group in output.strip().split(":") if group.strip()]
 
 
-def compose_openssl_pqc_command(service_spec: ResourceField, groups: str) -> str:
+def compose_openssl_pqc_command(service_spec: ResourceField, groups: str, connect_timeout: int = 10) -> str:
     """Builds an openssl s_client command with PQC group negotiation.
 
     Args:
         service_spec: Service spec object with clusterIP and ports.
         groups: Colon-separated TLS group names to offer (e.g. "SecP256r1MLKEM768:secp256r1").
+        connect_timeout: Timeout in seconds for the TLS connection attempt.
 
     Returns:
         str: The openssl command string.
     """
     return (
-        f"echo | openssl s_client -connect {service_spec.clusterIP}:{service_spec.ports[0].port} -groups {groups} 2>&1"
+        f"echo | timeout {connect_timeout}"
+        f" openssl s_client -connect {service_spec.clusterIP}:{service_spec.ports[0].port} -groups {groups} 2>&1"
     )
 
 
